@@ -32,6 +32,8 @@ app.get('/api/kelas', async (req, res) => {
 });
 
 // Untuk mencari mata kuliah, bisa ditambahkan query untuk mencari satu mata kuliah dengan Id tertentu
+// Bisa juga untuk melakukan ekspansi data, secara default mendapatkan data mata_kuliah itu tidak menyertakan kolom dosen dan kelas
+// Gunakan query expand=all untuk menampilkan detil dosen dan kelas yang berkaitan dengan mata kuliah tertentu
 app.get('/api/mata_kuliah', async (req, res) => {
     const id = req.query.id ?? null;
     const mataKuliah = id ? await getMataKuliah(id) : await getMataKuliahs();
@@ -97,6 +99,34 @@ app.get('/api/mata_kuliah', async (req, res) => {
     }
 })
 
+//Menghitung total semua entitas + mahasiswa (ambil dari properti mataKuliah.jumlahMahasiswa)
+app.get('/api/total', async (req, res) => {
+    let totalDosen = 0;
+    let totalKelas = 0;
+    let totalMataKuliah = 0;
+    let totalMahasiswa = 0;
+
+    const dosen = await getDosens();
+    const kelas = await getMultipleKelas();
+    const mataKuliah = await getMataKuliahs();
+
+    totalDosen = dosen.length;
+    totalKelas = kelas.length;
+    totalMataKuliah = mataKuliah.length;
+    totalMahasiswa = mataKuliah.reduce((accumulator, mk) => {
+        return accumulator + (mk.jumlah_mahasiswa || 0);
+    }, 0)
+
+    const result = {
+        totalDosen,
+        totalKelas,
+        totalMataKuliah,
+        totalMahasiswa
+    }
+
+    res.send(result);
+})
+
 //Untuk post data dosen
 app.post('/api/dosen', async (req, res) => {
     const { error } = validateDosen(req.body);
@@ -122,6 +152,8 @@ app.post('/api/kelas', async (req, res) => {
 });
 
 //Untuk post data mata kuliah
+//Untuk properti jam itu opsional, bentuknya bisa 'YYYY-MM-DD HH:mm:ss', 'DD-MM-YYYY HH:mm:ss', 'DD-MM-YYYY', 'YYYY-MM-DD'
+//Selain format di atas akan dianggap tidak valid
 app.post('/api/mata_kuliah', async (req, res) => {
     const { error } = validateMataKuliah(req.body);
     if (error) {
@@ -130,7 +162,7 @@ app.post('/api/mata_kuliah', async (req, res) => {
 
     const { name, dosen, kelas, jam, jumlah_mahasiswa } = req.body;
 
-    const date = dayjs(jam, ['YYYY-MM-DD HH:mm:ss', 'DD-MM-YYYY HH:mm:ss', 'DD-MM-YYYY', 'YYYY-MM-DD'], true);
+    const date = jam ? dayjs(jam, ['YYYY-MM-DD HH:mm:ss', 'DD-MM-YYYY HH:mm:ss', 'DD-MM-YYYY', 'YYYY-MM-DD'], true) : null;
 
     if (!date.isValid()) {
         return res.status(400).send('Error 400: Invalid date format for "jam"')
